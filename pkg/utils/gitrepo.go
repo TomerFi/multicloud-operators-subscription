@@ -250,7 +250,7 @@ func getConnectionOptions(cloneOptions *GitCloneOption, primary bool) (connectio
 }
 
 // CloneGitRepo clones a GitHub repository
-func CloneGitRepo(cloneOptions *GitCloneOption) (commitID string, err error) {
+func CloneGitRepo(cloneOptions *GitCloneOption) (commitID string, cloneCount int, err error) {
 	usingPrimary := true
 
 	options, err := getConnectionOptions(cloneOptions, true)
@@ -263,7 +263,7 @@ func CloneGitRepo(cloneOptions *GitCloneOption) (commitID string, err error) {
 		options, err = getConnectionOptions(cloneOptions, false)
 		if err != nil {
 			klog.Error("Failed to get Git clone options with the secondary channel.")
-			return "", err
+			return "", 0, err
 		}
 	}
 
@@ -277,6 +277,8 @@ func CloneGitRepo(cloneOptions *GitCloneOption) (commitID string, err error) {
 
 	repo, err := git.PlainClone(cloneOptions.DestDir, false, options)
 
+	cloneCounter := 1
+
 	if err != nil {
 		if usingPrimary {
 			klog.Error(err, " Failed to git clone with the primary channel: ", err.Error())
@@ -287,28 +289,29 @@ func CloneGitRepo(cloneOptions *GitCloneOption) (commitID string, err error) {
 			if err != nil {
 				klog.Error("Failed to get Git clone options with the secondary channel.")
 
-				return "", errors.New("Failed to get Git clone options with the secondary channel: " + " err: " + err.Error())
+				return "", cloneCounter, errors.New("Failed to get Git clone options with the secondary channel: " + " err: " + err.Error())
 			}
 
 			klog.Info("Trying to clone with the secondary channel")
 			klog.Info("Cloning ", options.URL, " into ", cloneOptions.DestDir)
 
 			repo, err = git.PlainClone(cloneOptions.DestDir, false, options)
+			cloneCounter++
 
 			if err != nil {
 				klog.Error("Failed to clone Git with the secondary channel. err:" + err.Error())
 
-				return "", errors.New("Failed to clone git: " + options.URL + " branch: " + cloneOptions.Branch.String() + " err: " + err.Error())
+				return "", cloneCounter, errors.New("Failed to clone git: " + options.URL + " branch: " + cloneOptions.Branch.String() + " err: " + err.Error())
 			}
 		} else {
-			return "", errors.New("Failed to clone git: " + options.URL + " branch: " + cloneOptions.Branch.String() + " err: " + err.Error())
+			return "", cloneCounter, errors.New("Failed to clone git: " + options.URL + " branch: " + cloneOptions.Branch.String() + " err: " + err.Error())
 		}
 	}
 
 	ref, err := repo.Head()
 	if err != nil {
 		klog.Error(err, " Failed to get git repo head")
-		return "", errors.New("failed to get git repo head, err: " + err.Error())
+		return "", cloneCounter, errors.New("failed to get git repo head, err: " + err.Error())
 	}
 
 	klog.Infof("Successfully cloned the repo and the current branch is %s", ref.Name().Short())
@@ -324,7 +327,7 @@ func CloneGitRepo(cloneOptions *GitCloneOption) (commitID string, err error) {
 
 		if err != nil {
 			klog.Error(err, " failed to resolve revision")
-			return "", errors.New("failed to resolve revision tag " + cloneOptions.RevisionTag + " err: " + err.Error())
+			return "", cloneCounter, errors.New("failed to resolve revision tag " + cloneOptions.RevisionTag + " err: " + err.Error())
 		}
 
 		klog.Infof("Revision tag %s is resolved to %s", cloneOptions.RevisionTag, revisionHash)
@@ -336,7 +339,7 @@ func CloneGitRepo(cloneOptions *GitCloneOption) (commitID string, err error) {
 
 		if err != nil {
 			klog.Error(err, " Failed to get work tree")
-			return "", err
+			return "", cloneCounter, err
 		}
 
 		klog.Infof("Checking out commit %s ", targetCommit)
@@ -348,12 +351,12 @@ func CloneGitRepo(cloneOptions *GitCloneOption) (commitID string, err error) {
 
 		if err != nil {
 			klog.Error(err, " Failed to checkout commit")
-			return "", errors.New("failed to checkout commit " + targetCommit + " err: " + err.Error())
+			return "", cloneCounter, errors.New("failed to checkout commit " + targetCommit + " err: " + err.Error())
 		}
 
 		klog.Infof("Successfully checked out commit %s ", targetCommit)
 
-		return targetCommit, nil
+		return targetCommit, cloneCounter, nil
 	}
 
 	// Otherwise return the latest commit ID
@@ -361,10 +364,10 @@ func CloneGitRepo(cloneOptions *GitCloneOption) (commitID string, err error) {
 
 	if err != nil {
 		klog.Error(err, " Failed to get git repo commit")
-		return "", errors.New("failed to get the repo's latest commit hash, err: " + err.Error())
+		return "", cloneCounter, errors.New("failed to get the repo's latest commit hash, err: " + err.Error())
 	}
 
-	return commit.ID().String(), nil
+	return commit.ID().String(), cloneCounter, nil
 }
 
 func getKnownHostFromURL(sshURL string, filepath string) error {
