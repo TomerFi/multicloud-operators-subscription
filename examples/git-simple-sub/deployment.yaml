@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: git-simple-subscription-nginx
-        image: nginx:latest
+        image: nginxinc/nginx-unprivileged:latest
         ports:
         - containerPort: 9876
         resources:
