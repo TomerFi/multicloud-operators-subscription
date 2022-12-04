@@ -1,6 +1,6 @@
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: NoneExistingKind
 metadata:
   name: git-simple-subscription
   labels:
